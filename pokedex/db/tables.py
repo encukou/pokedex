@@ -1520,6 +1520,66 @@ create_translation_table('region_names', Region, 'names',
         info=dict(description="The name", format='plaintext', official=True)),
 )
 
+
+class SpecialEncounter(TableBase):
+    u"""Special in-game encounters with pokémon: trades, prizes, fossils, etc.
+    """
+    __tablename__ = 'special_encounters'
+    id = Column(Integer, primary_key=True, nullable=False,
+        info=dict(description=u"A numeric ID"))
+    type_id = Column(Integer, ForeignKey('special_encounter_types.id'), nullable=False,
+        info=dict(description=u"Type of the encounter"))
+    location_area_id = Column(Integer, ForeignKey('location_areas.id'), nullable=True,
+        info=dict(description=u"The location of the encounter, if specific"))
+    roam_region_id = Column(Integer, ForeignKey('regions.id'), nullable=True,
+        info=dict(description=u"The region, if roaming"))
+    cost = Column(Integer, nullable=True,
+        info=dict(description=u"The cost, in game money or coins, if applicable"))
+    traded_species_id = Column(Integer, ForeignKey('pokemon_species.id'), nullable=True,
+        info=dict(description=u"The species the player needs to offer in trade, if applicable"))
+    traded_gender_id = Column(Integer, ForeignKey('genders.id'), nullable=True,
+        info=dict(description=u"The gender of the pokémon the player needs to offer in trade, if applicable"))
+    required_item_id = Column(Integer, ForeignKey('items.id'), nullable=True,
+        info=dict(description=u"The item needed to activate this encounter"))
+
+
+class SpecialEncounterPokemon(TableBase):
+    u"""Maps special encounters to the Pokémon they involve
+    """
+    __tablename__ = 'special_encounter_pokemon'
+    special_encounter_id = Column(Integer, ForeignKey('special_encounters.id'), primary_key=True, nullable=False, autoincrement=False,
+        info=dict(description=u"The encounter"))
+    individual_pokemon_id = Column(Integer, ForeignKey('individual_pokemon.id'), primary_key=True, nullable=False, autoincrement=False,
+        info=dict(description=u"The individual pokemon encountered"))
+
+
+class SpecialEncounterType(TableBase):
+    u"""Type of a special in-game encounter
+    """
+    __tablename__ = 'special_encounter_types'
+    __singlename__ = 'special_encounter_type'
+    id = Column(Integer, primary_key=True, nullable=False,
+        info=dict(description=u"A numeric ID"))
+    identifier = Column(Unicode(16), nullable=False,
+        info=dict(description=u"An identifier", format='identifier'))
+
+create_translation_table('special_encounter_type_names', SpecialEncounterType, 'names',
+    relation_lazy='joined',
+    name = Column(Unicode(16), nullable=False, index=True,
+        info=dict(description="The name", format='plaintext', official=False)),
+)
+
+
+class SpecialEncounterVersion(TableBase):
+    u"""Maps special encounters to the versions they occur in
+    """
+    __tablename__ = 'special_encounter_versions'
+    special_encounter_id = Column(Integer, ForeignKey('special_encounters.id'), primary_key=True, nullable=False, autoincrement=False,
+        info=dict(description=u"The encounter"))
+    version_id = Column(Integer, ForeignKey('versions.id'), primary_key=True, nullable=False, autoincrement=False,
+        info=dict(description=u"The version"))
+
+
 class Stat(TableBase):
     u"""A Stat, such as Attack or Speed
     """
@@ -2145,8 +2205,43 @@ Region.version_group_regions = relationship(VersionGroupRegion,
 Region.version_groups = association_proxy('version_group_regions', 'version_group')
 
 
+SpecialEncounter.type = relationship(SpecialEncounterType,
+    backref='encounters')
+SpecialEncounter.location_area = relationship(LocationArea,
+    backref='special_encounters')
+SpecialEncounter.roam_region = relationship(Region,
+    backref='roam_encounters')
+SpecialEncounter.traded_species = relationship(PokemonSpecies,
+    backref='possible_in_game_trades')
+SpecialEncounter.traded_gender = relationship(Gender,
+    primaryjoin=SpecialEncounter.traded_gender_id == Gender.id,
+    )
+SpecialEncounter.required_item = relationship(Item,
+    primaryjoin=SpecialEncounter.required_item_id == Item.id,
+    )
+SpecialEncounter.versions = relationship(Version,
+    secondary=SpecialEncounterVersion.__table__,
+    primaryjoin=SpecialEncounterVersion.special_encounter_id == SpecialEncounter.id,
+    secondaryjoin=SpecialEncounterVersion.version_id == Version.id,
+    backref='special_encounters')
+SpecialEncounter.pokemon = relationship(IndividualPokemon,
+    secondary=SpecialEncounterPokemon.__table__,
+    primaryjoin=SpecialEncounterPokemon.special_encounter_id == SpecialEncounter.id,
+    secondaryjoin=SpecialEncounterPokemon.individual_pokemon_id == IndividualPokemon.id,
+    backref='special_encounters')
+
+
+SpecialEncounterPokemon.encounter = relationship(SpecialEncounter)
+SpecialEncounterPokemon.pokemon = relationship(IndividualPokemon)
+
+
+SpecialEncounterVersion.encounter = relationship(SpecialEncounter)
+SpecialEncounterVersion.version = relationship(Version)
+
+
 Stat.damage_class = relationship(MoveDamageClass,
     backref='stats')
+
 
 StatHint.stat = relationship(Stat,
     innerjoin=True,
