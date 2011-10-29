@@ -404,6 +404,36 @@ class EncounterSlot(TableBase):
     rarity = Column(Integer, nullable=True,
         info=dict(description="The chance of the encounter as a percentage"))
 
+
+class Event(TableBase):
+    u"""An event in the real world, such as a legendary Pokémon giveaway
+    """
+    __tablename__ = 'events'
+    __singlename__ = 'event'
+    id = Column(Integer, primary_key=True, nullable=False,
+        info=dict(description="A numeric ID"))
+    start_date = Column(DateTime, nullable=True,
+        info=dict(description="Date this event started"))
+    end_date = Column(DateTime, nullable=True,
+        info=dict(description="Date this event ended or is planned to end"))
+    location = Column(Integer, ForeignKey('real_world_locations.id'), nullable=True,
+        info=dict(description="Real-world location of the event"))
+
+create_translation_table('event_names', Event, 'names',
+    name = Column(Unicode(64), nullable=False, index=True,
+        info=dict(description="The name", format='plaintext', official=False)),
+)
+
+class EventPokemon(TableBase):
+    u"""Links Events to IndividualPokemon received in them
+    """
+    __tablename__ = 'event_pokemon'
+    event_id = Column(Integer, ForeignKey('events.id'), primary_key=True, nullable=False,
+        info=dict(description="ID of the event"))
+    individual_pokemon_id = Column(Integer, ForeignKey('individual_pokemon.id'), primary_key=True, nullable=False,
+        info=dict(description="ID of the pokemon received form the event"))
+
+
 class IndividualPokemon(TableBase):
     u"""A Pokémon received through an event giveaway or special encounter
     """
@@ -411,7 +441,7 @@ class IndividualPokemon(TableBase):
     __singlename__ = 'individual_pokemon'
     id = Column(Integer, primary_key=True, nullable=False,
         info=dict(description="A numeric ID"))
-    pokemon_form_id = Column(Integer, ForeignKey('pokemon_forms.id'),nullable=False,
+    pokemon_form_id = Column(Integer, ForeignKey('pokemon_forms.id'), nullable=False,
         info=dict(description=u"Form of the pokémon (implies species)"))
     ability_id = Column(Integer, ForeignKey('abilities.id'), nullable=True,
         info=dict(description=u"The ability. None if random or not applicable."))
@@ -1504,6 +1534,22 @@ class PokemonType(TableBase):
     slot = Column(Integer, primary_key=True, nullable=False, autoincrement=False,
         info=dict(description=u"The type's slot, 1 or 2, used to sort types if there are two of them"))
 
+class RealWorldLocation(TableBase):
+    u"""A location in the real world
+    """
+    __tablename__ = 'real_world_locations'
+    __singlename__ = 'real_world_location'
+    id = Column(Integer, primary_key=True, nullable=False, autoincrement=False,
+        info=dict(description=u"A numeric ID"))
+    identifier = Column(Unicode(16), nullable=False,
+        info=dict(description=u"An identifier", format='identifier'))
+
+create_translation_table('real_world_location_names', RealWorldLocation, 'names',
+    relation_lazy='joined',
+    name = Column(Unicode(16), nullable=False, index=True,
+        info=dict(description="The name", format='plaintext', official=True)),
+)
+
 class Region(TableBase):
     u"""Major areas of the world: Kanto, Johto, etc.
     """
@@ -1801,6 +1847,15 @@ EncounterSlot.method = relationship(EncounterMethod,
     innerjoin=True, lazy='joined',
     backref='slots')
 EncounterSlot.version_group = relationship(VersionGroup, innerjoin=True)
+
+
+Event.pokemon = relationship(IndividualPokemon,
+    secondary=EventPokemon.__table__,
+    primaryjoin=EventPokemon.event_id == Event.id,
+    secondaryjoin=EventPokemon.individual_pokemon_id == IndividualPokemon.id,
+    backref='events')
+Event.real_world_location = relationship(RealWorldLocation,
+    backref='events')
 
 
 EvolutionChain.baby_trigger_item = relationship(Item,
