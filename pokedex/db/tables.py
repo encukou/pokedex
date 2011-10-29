@@ -412,6 +412,8 @@ class Event(TableBase):
     __singlename__ = 'event'
     id = Column(Integer, primary_key=True, nullable=False,
         info=dict(description="A numeric ID"))
+    distribution_method_id = Column(Integer, ForeignKey('event_distribution_methods.id'), nullable=True,
+        info=dict(description="Method of distribution for the event's goodies"))
     start_date = Column(DateTime, nullable=True,
         info=dict(description="Date this event started"))
     end_date = Column(DateTime, nullable=True,
@@ -424,6 +426,21 @@ create_translation_table('event_names', Event, 'names',
         info=dict(description="The name", format='plaintext', official=False)),
 )
 
+class EventDistributionMethod(TableBase):
+    u"""Method of distribution of an event's goodies
+    """
+    __tablename__ = 'event_distribution_methods'
+    __singlename__ = 'event_distribution_method'
+    id = Column(Integer, primary_key=True, nullable=False,
+        info=dict(description="A numeric ID"))
+    identifier = Column(Unicode(16), nullable=False,
+        info=dict(description="An identifier", format='identifier'))
+
+create_translation_table('event_distribution_method_names', EventDistributionMethod, 'names',
+    name = Column(Unicode(32), nullable=False, index=True,
+        info=dict(description="The name", format='plaintext', official=False)),
+)
+
 class EventPokemon(TableBase):
     u"""Links Events to IndividualPokemon received in them
     """
@@ -432,6 +449,15 @@ class EventPokemon(TableBase):
         info=dict(description="ID of the event"))
     individual_pokemon_id = Column(Integer, ForeignKey('individual_pokemon.id'), primary_key=True, nullable=False,
         info=dict(description="ID of the pokemon received form the event"))
+
+class EventVersion(TableBase):
+    u"""Links Events to compatible versions
+    """
+    __tablename__ = 'event_versions'
+    event_id = Column(Integer, ForeignKey('events.id'), primary_key=True, nullable=False,
+        info=dict(description="ID of the event"))
+    version_id = Column(Integer, ForeignKey('versions.id'), primary_key=True, nullable=False,
+        info=dict(description="ID of the version"))
 
 
 class IndividualPokemon(TableBase):
@@ -1855,6 +1881,13 @@ Event.pokemon = relationship(IndividualPokemon,
     secondaryjoin=EventPokemon.individual_pokemon_id == IndividualPokemon.id,
     backref='events')
 Event.real_world_location = relationship(RealWorldLocation,
+    backref='events')
+Event.versions = relationship(Version,
+    secondary=EventVersion.__table__,
+    primaryjoin=EventVersion.event_id == Event.id,
+    secondaryjoin=EventVersion.version_id == Version.id,
+    backref='events')
+Event.distribution_method = relationship(EventDistributionMethod,
     backref='events')
 
 
