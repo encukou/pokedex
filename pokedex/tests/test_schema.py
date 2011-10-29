@@ -173,7 +173,7 @@ def test_texts(cls):
         good_formats = 'markdown plaintext gametext'.split()
         assert_text = '%s is language-specific'
     else:
-        good_formats = 'identifier latex'.split()
+        good_formats = 'identifier latex as-is'.split()
         assert_text = '%s is not language-specific'
     columns = sorted(cls.__table__.c, key=lambda c: c.name)
     text_columns = []
@@ -199,11 +199,3 @@ def test_texts(cls):
     if hasattr(cls, 'local_language') and len(text_columns) > 1:
         for column in text_columns:
             assert column.nullable
-
-@single_params(*tables.mapped_classes)
-def test_identifiers_with_names(table):
-    """Test that named tables have identifiers
-    """
-    for translation_class in table.translation_classes:
-        if hasattr(translation_class, 'name'):
-            assert hasattr(table, 'identifier'), table
