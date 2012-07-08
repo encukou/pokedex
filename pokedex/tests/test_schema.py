@@ -68,7 +68,7 @@ def test_i18n_table_creation():
 
     # OK, create all the tables and gimme a session
     Base.metadata.create_all()
-    sm = sessionmaker(class_=MultilangSession)
+    sm = sessionmaker(class_=MultilangSession, default_version_group_id=0)
     sess = MultilangScopedSession(sm)
 
     # Create some languages and foos to bind together

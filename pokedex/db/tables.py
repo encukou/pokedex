@@ -36,7 +36,7 @@ from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.interfaces import AttributeExtension
-from sqlalchemy.sql import and_, or_
+from sqlalchemy.sql import and_, or_, bindparam
 from sqlalchemy.schema import ColumnDefault
 from sqlalchemy.types import *
 
@@ -706,24 +706,6 @@ class Move(TableBase):
         info=dict(description="An identifier", format='identifier'))
     generation_id = Column(Integer, ForeignKey('generations.id'), nullable=False,
         info=dict(description="ID of the generation this move first appeared in"))
-    type_id = Column(Integer, ForeignKey('types.id'), nullable=False,
-        info=dict(description="ID of the move's elemental type"))
-    power = Column(SmallInteger, nullable=False,
-        info=dict(description="Base power of the move"))
-    pp = Column(SmallInteger, nullable=True,
-        info=dict(description="Base PP (Power Points) of the move, nullable if not applicable (e.g. Struggle and Shadow moves)."))
-    accuracy = Column(SmallInteger, nullable=True,
-        info=dict(description="Accuracy of the move; NULL means it never misses"))
-    priority = Column(SmallInteger, nullable=False,
-        info=dict(description="The move's priority bracket"))
-    target_id = Column(Integer, ForeignKey('move_targets.id'), nullable=False,
-        info=dict(description="ID of the target (range) of the move"))
-    damage_class_id = Column(Integer, ForeignKey('move_damage_classes.id'), nullable=False,
-        info=dict(description="ID of the damage class (physical/special) of the move"))
-    effect_id = Column(Integer, ForeignKey('move_effects.id'), nullable=False,
-        info=dict(description="ID of the move's effect"))
-    effect_chance = Column(Integer, nullable=True,
-        info=dict(description="The chance for a secondary effect. What this is a chance of is specified by the move's effect."))
     contest_type_id = Column(Integer, ForeignKey('contest_types.id'), nullable=True,
         info=dict(description="ID of the move's Contest type (e.g. cool or smart)"))
     contest_effect_id = Column(Integer, ForeignKey('contest_effects.id'), nullable=True,
@@ -755,27 +737,6 @@ create_translation_table('move_battle_style_prose', MoveBattleStyle, 'prose',
     name = Column(Unicode(8), nullable=False, index=True,
         info=dict(description="The name", format='plaintext', official=False)),
 )
-
-class MoveChangelog(TableBase):
-    """History of changes to moves across main game versions."""
-    __tablename__ = 'move_changelog'
-    __singlename__ = 'move_changelog'
-    move_id = Column(Integer, ForeignKey('moves.id'), primary_key=True, nullable=False,
-        info=dict(description="ID of the move that changed"))
-    changed_in_version_group_id = Column(Integer, ForeignKey('version_groups.id'), primary_key=True, nullable=False,
-        info=dict(description="ID of the version group in which the move changed"))
-    type_id = Column(Integer, ForeignKey('types.id'), nullable=True,
-        info=dict(description="Prior type of the move, or NULL if unchanged"))
-    power = Column(SmallInteger, nullable=True,
-        info=dict(description="Prior base power of the move, or NULL if unchanged"))
-    pp = Column(SmallInteger, nullable=True,
-        info=dict(description="Prior base PP of the move, or NULL if unchanged"))
-    accuracy = Column(SmallInteger, nullable=True,
-        info=dict(description="Prior accuracy of the move, or NULL if unchanged"))
-    effect_id = Column(Integer, ForeignKey('move_effects.id'), nullable=True,
-        info=dict(description="Prior ID of the effect, or NULL if unchanged"))
-    effect_chance = Column(Integer, nullable=True,
-        info=dict(description="Prior effect chance, or NULL if unchanged"))
 
 class MoveDamageClass(TableBase):
     u"""Any of the damage classes moves can have, i.e. physical, special, or non-damaging.
@@ -961,6 +922,32 @@ create_translation_table('move_target_prose', MoveTarget, 'prose',
     description = Column(Unicode(128), nullable=True,
         info=dict(description="A description", format='plaintext')),
 )
+
+class MoveMechanic(TableBase):
+    """Data about main game move mechanics."""
+    __tablename__ = 'move_mechanics'
+    move_id = Column(Integer, ForeignKey('moves.id'), primary_key=True, nullable=False,
+        info=dict(description="ID of the move this data is for"))
+    version_group_id = Column(Integer, ForeignKey('version_groups.id'), primary_key=True, nullable=False,
+        info=dict(description="ID of the version group this data is for"))
+    type_id = Column(Integer, ForeignKey('types.id'), nullable=False,
+        info=dict(description="Type of the move"))
+    power = Column(SmallInteger, nullable=True,
+        info=dict(description="Base power of the move"))
+    pp = Column(SmallInteger, nullable=True,
+        info=dict(description="PP of the move"))
+    accuracy = Column(SmallInteger, nullable=True,
+        info=dict(description="Accuracy of the move"))
+    priority = Column(SmallInteger, nullable=False,
+        info=dict(description="The move's priority bracket"))
+    target_id = Column(Integer, ForeignKey('move_targets.id'), nullable=False,
+        info=dict(description="ID of the target (range) of the move"))
+    damage_class_id = Column(Integer, ForeignKey('move_damage_classes.id'), nullable=False,
+        info=dict(description="ID of the damage class (physical/special) of the move"))
+    effect_id = Column(Integer, ForeignKey('move_effects.id'), nullable=False,
+        info=dict(description="ID of the move effect"))
+    effect_chance = Column(Integer, nullable=True,
+        info=dict(description="Effect chance"))
 
 class Nature(TableBase):
     u"""A nature a Pokémon can have, such as Calm or Brave
@@ -1826,17 +1813,19 @@ Machine.version_group = relationship(VersionGroup,
     innerjoin=True, lazy='joined')
 
 
-Move.changelog = relationship(MoveChangelog,
-    order_by=MoveChangelog.changed_in_version_group_id.desc(),
-    backref=backref('move', innerjoin=True, lazy='joined'))
+Move.mechanics = relationship(MoveMechanic,
+    backref=backref('move'))
+Move.default_mechanic = relationship(MoveMechanic,
+    primaryjoin=and_(
+        MoveMechanic.move_id == Move.id,
+        MoveMechanic.version_group_id == bindparam('_default_version_group_id',
+            value='dummy', type_=Integer, required=True),
+    ), uselist=False, lazy='joined')
 Move.contest_effect = relationship(ContestEffect,
     backref='moves')
 Move.contest_combo_next = association_proxy('contest_combo_first', 'second')
 Move.contest_combo_prev = association_proxy('contest_combo_second', 'first')
 Move.contest_type = relationship(ContestType,
-    backref='moves')
-Move.damage_class = relationship(MoveDamageClass,
-    innerjoin=True,
     backref='moves')
 Move.flags = association_proxy('move_flags', 'flag')
 Move.flavor_text = relationship(MoveFlavorText,
@@ -1850,39 +1839,29 @@ Move.meta = relationship(MoveMeta,
     uselist=False, innerjoin=True,
     backref='move')
 Move.meta_stat_changes = relationship(MoveMetaStatChange)
-Move.move_effect = relationship(MoveEffect,
-    innerjoin=True,
-    backref='moves')
 Move.move_flags = relationship(MoveFlagMap,
     backref='move')
 Move.super_contest_effect = relationship(SuperContestEffect,
     backref='moves')
 Move.super_contest_combo_next = association_proxy('super_contest_combo_first', 'second')
 Move.super_contest_combo_prev = association_proxy('super_contest_combo_second', 'first')
-Move.target = relationship(MoveTarget,
-    innerjoin=True,
-    backref='moves')
-Move.type = relationship(Type,
-    innerjoin=True,
-    backref='moves')
+Move.type_id = association_proxy('default_mechanic', 'type_id')
+Move.type = association_proxy('default_mechanic', 'type')
+Move.effect_chance = association_proxy('default_mechanic', 'effect_chance')
+Move.power = association_proxy('default_mechanic', 'power')
+Move.pp = association_proxy('default_mechanic', 'pp')
+Move.accuracy = association_proxy('default_mechanic', 'accuracy')
+Move.priority = association_proxy('default_mechanic', 'priority')
+Move.target = association_proxy('default_mechanic', 'target')
+Move.damage_class = association_proxy('default_mechanic', 'damage_class')
+Move.effect = association_proxy('default_mechanic', 'effect')
+Move.move_effect = association_proxy('default_mechanic', 'move_effect')
+Move.effect_id = association_proxy('default_mechanic', 'effect_id')
 
 Move.effect = markdown.MoveEffectProperty('effect')
 Move.effect_map = markdown.MoveEffectPropertyMap('effect_map')
 Move.short_effect = markdown.MoveEffectProperty('short_effect')
 Move.short_effect_map = markdown.MoveEffectPropertyMap('short_effect_map')
-
-MoveChangelog.changed_in = relationship(VersionGroup,
-    innerjoin=True, lazy='joined',
-    backref='move_changelog')
-MoveChangelog.move_effect = relationship(MoveEffect,
-    backref='move_changelog')
-MoveChangelog.type = relationship(Type,
-    backref='move_changelog')
-
-MoveChangelog.effect = markdown.MoveEffectProperty('effect')
-MoveChangelog.effect_map = markdown.MoveEffectPropertyMap('effect_map')
-MoveChangelog.short_effect = markdown.MoveEffectProperty('short_effect')
-MoveChangelog.short_effect_map = markdown.MoveEffectPropertyMap('short_effect_map')
 
 MoveEffect.changelog = relationship(MoveEffectChangelog,
     order_by=MoveEffectChangelog.changed_in_version_group_id.desc(),
@@ -1899,6 +1878,25 @@ MoveFlavorText.version_group = relationship(VersionGroup,
 MoveFlavorText.language = relationship(Language,
     innerjoin=True, lazy='joined')
 
+MoveMechanic.version_group = relationship(VersionGroup,
+    innerjoin=True, lazy='joined',
+    backref='move_mechanics')
+MoveMechanic.move_effect = relationship(MoveEffect,
+    backref='move_mechanics')
+MoveMechanic.type = relationship(Type,
+    backref='move_mechanics')
+MoveMechanic.target = relationship(MoveTarget,
+    innerjoin=True,
+    backref='move_mechanics')
+MoveMechanic.damage_class = relationship(MoveDamageClass,
+    innerjoin=True,
+    backref='move_mechanics')
+
+MoveMechanic.effect = markdown.MoveEffectProperty('effect')
+MoveMechanic.effect_map = markdown.MoveEffectPropertyMap('effect_map')
+MoveMechanic.short_effect = markdown.MoveEffectProperty('short_effect')
+MoveMechanic.short_effect_map = markdown.MoveEffectPropertyMap('short_effect_map')
+
 MoveMeta.category = relationship(MoveMetaCategory,
     innerjoin=True, lazy='joined',
     backref='move_meta')
@@ -1906,10 +1904,27 @@ MoveMeta.ailment = relationship(MoveMetaAilment,
     innerjoin=True, lazy='joined',
     backref='move_meta')
 
+MoveDamageClass.moves = relationship(Move,
+    secondary=MoveMechanic.__table__,
+    primaryjoin=MoveDamageClass.id==MoveMechanic.damage_class_id,
+    secondaryjoin=and_(
+        MoveMechanic.move_id==Move.id,
+        MoveMechanic.version_group_id == bindparam('_default_version_group_id',
+            value='dummy', type_=Integer, required=True),
+        ))
+
+MoveTarget.moves = relationship(Move,
+    secondary=MoveMechanic.__table__,
+    primaryjoin=MoveTarget.id==MoveMechanic.target_id,
+    secondaryjoin=and_(
+        MoveMechanic.move_id==Move.id,
+        MoveMechanic.version_group_id == bindparam('_default_version_group_id',
+            value='dummy', type_=Integer, required=True),
+        ))
+
 MoveMetaStatChange.stat = relationship(Stat,
     innerjoin=True, lazy='joined',
     backref='move_meta_stat_changes')
-
 
 Nature.decreased_stat = relationship(Stat,
     primaryjoin=Nature.decreased_stat_id==Stat.id,
@@ -2172,6 +2187,14 @@ Type.damage_efficacies = relationship(TypeEfficacy,
 Type.target_efficacies = relationship(TypeEfficacy,
     primaryjoin=Type.id==TypeEfficacy.target_type_id,
     backref=backref('target_type', innerjoin=True, lazy='joined'))
+Type.moves = relationship(Move,
+    secondary=MoveMechanic.__table__,
+    primaryjoin=Type.id==MoveMechanic.type_id,
+    secondaryjoin=and_(
+        MoveMechanic.move_id==Move.id,
+        MoveMechanic.version_group_id == bindparam('_default_version_group_id',
+            value='dummy', type_=Integer, required=True),
+        ))
 
 Type.generation = relationship(Generation,
     innerjoin=True,

@@ -8,6 +8,7 @@ from .tables import Language, metadata
 from .multilang import MultilangSession, MultilangScopedSession
 
 ENGLISH_ID = 9
+DEFAULT_VERSION_GROUP_ID = 11
 
 
 def connect(uri=None, session_args={}, engine_args={}, engine_prefix=''):
@@ -47,7 +48,9 @@ def connect(uri=None, session_args={}, engine_args={}, engine_prefix=''):
     all_session_args = dict(autoflush=True, autocommit=False, bind=engine)
     all_session_args.update(session_args)
     sm = orm.sessionmaker(class_=MultilangSession,
-        default_language_id=ENGLISH_ID, **all_session_args)
+        default_language_id=ENGLISH_ID,
+        default_version_group_id=DEFAULT_VERSION_GROUP_ID,
+        **all_session_args)
     session = MultilangScopedSession(sm)
 
     return session

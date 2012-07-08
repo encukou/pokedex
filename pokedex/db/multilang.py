@@ -213,6 +213,9 @@ class MultilangQuery(Query):
         if '_default_language_id' not in self._params:
             self._params = self._params.copy()
             self._params['_default_language_id'] = self.session.default_language_id
+        if '_default_version_group_id' not in self._params:
+            self._params = self._params.copy()
+            self._params['_default_version_group_id'] = self.session.default_version_group_id
         return super(MultilangQuery, self).__iter__()
 
 class MultilangSession(Session):
@@ -226,6 +229,8 @@ class MultilangSession(Session):
     def __init__(self, *args, **kwargs):
         if 'default_language_id' in kwargs:
             self.default_language_id = kwargs.pop('default_language_id')
+        if 'default_version_group_id' in kwargs:
+            self.default_version_group_id = kwargs.pop('default_version_group_id')
 
         markdown_extension_class = kwargs.pop('markdown_extension_class',
                 self.markdown_extension_class)
@@ -248,6 +253,16 @@ class MultilangScopedSession(ScopedSession):
     @default_language_id.setter
     def default_language_id(self, new):
         self.registry().default_language_id = new
+
+    @property
+    def default_version_group_id(self):
+        """Passes the new default version group id through to the current session.
+        """
+        return self.registry().default_version_group_id
+
+    @default_version_group_id.setter
+    def default_version_group_id(self, new):
+        self.registry().default_version_group_id = new
 
     @property
     def markdown_extension(self):
