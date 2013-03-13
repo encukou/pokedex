@@ -336,7 +336,9 @@ def load(session, tables=[], directory=None, drop_tables=False, verbose=False, s
 
     # SQLite check
     if session.connection().dialect.name == 'sqlite':
+        print_start('SQLite integrity check')
         session.connection().execute("PRAGMA integrity_check")
+        print_done()
 
 
 
