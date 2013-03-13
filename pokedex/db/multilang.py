@@ -131,6 +131,7 @@ def create_translation_table(_table_name, foreign_class, relation_name,
             info=dict(description="Language these texts are in")),
     )
     Translations.__table__ = table
+    Translations.__tablename__ = _table_name
 
     # Add ye columns
     # Column objects have a _creation_order attribute in ascending order; use
