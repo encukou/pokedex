@@ -3,6 +3,7 @@ import csv
 import fnmatch
 import os.path
 import sys
+from datetime import datetime
 
 import sqlalchemy.sql.util
 import sqlalchemy.types
@@ -260,6 +261,8 @@ def load(session, tables=[], directory=None, drop_tables=False, verbose=False, s
                         value = False
                     else:
                         value = True
+                elif isinstance(column.type, sqlalchemy.types.Date):
+                    value = datetime.strptime(value, "%Y-%m-%d").date()
                 else:
                     # Otherwise, unflatten from bytes
                     value = value.decode('utf-8')
